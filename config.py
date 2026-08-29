@@ -5,15 +5,14 @@ import os
 ENV = os.environ.get('ENV', 'local')
 
 if ENV == 'tc1':
-    # Faye to fill in the correct TC1 paths
-    DATA_REAL      = '/home/UG/friendusername/data/cifake/train/REAL'
-    DATA_FAKE      = '/home/UG/friendusername/data/cifake/train/FAKE'
-    DATA_TEST_REAL = '/home/UG/friendusername/data/cifake/test/REAL'
-    DATA_TEST_FAKE = '/home/UG/friendusername/data/cifake/test/FAKE'
-    VAL_REAL       = '/home/UG/friendusername/data/validation/real'
-    VAL_AIGC       = '/home/UG/friendusername/data/validation/aigc'
-    FEATURES_DIR   = '/home/UG/friendusername/features'
-    MODEL_PATH     = '/home/UG/friendusername/classifier.pt'
+    DATA_REAL      = '/tc1home/FYP/faye0004/techjam-track5/data/cifake/train/REAL'
+    DATA_FAKE      = '/tc1home/FYP/faye0004/techjam-track5/data/cifake/train/FAKE'
+    DATA_TEST_REAL = '/tc1home/FYP/faye0004/techjam-track5/data/cifake/test/REAL'
+    DATA_TEST_FAKE = '/tc1home/FYP/faye0004/techjam-track5/data/cifake/test/FAKE'
+    VAL_REAL       = '/tc1home/FYP/faye0004/techjam-track5/data/validation/real'
+    VAL_AIGC       = '/tc1home/FYP/faye0004/techjam-track5/data/validation/aigc'
+    FEATURES_DIR   = '/tc1home/FYP/faye0004/track5/feature_test'
+    MODEL_PATH     = '/tc1home/FYP/faye0004/track5/results/classifier.pt'
 else:
     # For local testing 
     DATA_REAL      = 'data_test/REAL'

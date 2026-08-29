@@ -12,12 +12,11 @@
 #SBATCH --error=error_%x_%j.err
 
 module load cuda/12.2
-module load anaconda
-source activate techjam
+source ~/venvs/techjam312/bin/activate
 
 export ENV=tc1
 
-cd ~/techjam-track5
+cd ~/track5
 
 echo "Starting augmentation..."
 python src/augment.py
