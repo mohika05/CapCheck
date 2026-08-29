@@ -1,0 +1,24 @@
+# Data
+data/
+data_test/
+*.zip
+
+# Generated features — too large for git
+features/
+features_test/
+*.npy
+
+# Python
+__pycache__/
+*.pyc
+.env
+venv/
+techjam/
+
+# Secrets — never commit these
+*.key
+kaggle.json
+.env
+
+# OS
+.DS_Store

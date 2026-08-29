@@ -1,0 +1,11 @@
+torch
+torchvision
+open-clip-torch
+albumentations
+Pillow
+numpy
+scikit-learn
+tqdm
+opencv-python-headless
+pandas
+datasets
