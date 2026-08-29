@@ -4,7 +4,8 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --mem=30G
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=4
 #SBATCH --time=120
 #SBATCH --job-name=augment
 #SBATCH --output=output_%x_%j.out

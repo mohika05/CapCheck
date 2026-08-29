@@ -4,7 +4,8 @@
 #SBATCH --nodes=1
 #SBATCH --gres=gpu:1
 #SBATCH --mem=20G
-#SBATCH --ntasks-per-node=4
+#SBATCH --ntasks=1
+#SBATCH --cpus-per-task=8
 #SBATCH --time=60
 #SBATCH --job-name=extract
 #SBATCH --output=output_%x_%j.out
