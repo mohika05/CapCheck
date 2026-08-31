@@ -80,7 +80,7 @@ if ENV == "local":
     FEATURES_TRAIN = str(PROJECT_ROOT / "features_test")
     MODEL_PATH = str(PROJECT_ROOT / "results" / "classifier.pt")
 
-    PREDICT_IMAGES = str(PROJECT_ROOT / "data_test" / "validation")
+    PREDICT_IMAGES = str(PROJECT_ROOT / "input")
     PREDICTIONS_OUT = str(PROJECT_ROOT / "results" / "predictions_local.json")
     ROBUSTNESS_OUT = str(PROJECT_ROOT / "results" / "robustness_local.json")
 
