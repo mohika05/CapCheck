@@ -45,22 +45,24 @@ Contents of `requirements.txt`: `torch`, `open-clip-torch`, `Pillow`, `numpy`, `
 
 ```
 track5/
-â”œâ”€â”€ config.py                    # Unified config â€” auto-switches between local and GPU
-â”œâ”€â”€ predict.py                   # Inference script (competition deliverable)
-â”œâ”€â”€ requirements.txt
-â”œâ”€â”€ src/
-â”‚   â”œâ”€â”€ stream_extract.py        # Feature extraction (CLIP + DCT + augmentations)
-â”‚   â””â”€â”€ train.py                 # MLP classifier training
-â”œâ”€â”€ jobs/
-â”‚   â”œâ”€â”€ job_extract.sh           # SLURM script for feature extraction
-â”‚   â”œâ”€â”€ job_train.sh             # SLURM script for training
-â”‚   â””â”€â”€ job_predict.sh           # SLURM script for WildFake evaluation
-â”œâ”€â”€ results/
-â”‚   â”œâ”€â”€ classifier.pt            # Trained model checkpoint
-â”‚   â”œâ”€â”€ predictions.json         # WildFake clean predictions
-â”‚   â”œâ”€â”€ predictions_local.json   # Local test predictions
-â”‚   â””â”€â”€ robustness_summary.json  # Per-transform metrics
-â””â”€â”€ RUNNING_INSTRUCTIONS.md      # Quick-start inference guide
+├── config.py                    # Unified config - auto-switches between local and GPU
+├── predict.py                   # Inference script (competition deliverable)
+├── requirements.txt
+├── input/                       # Test images
+│   ├── real/                    
+│   └── ai/                      
+├── src/
+│   ├── stream_extract.py        # Feature extraction (CLIP + DCT + augmentations)
+│   └── train.py                 # MLP classifier training
+├── jobs/
+│   ├── job_extract.sh           # SLURM script for feature extraction
+│   ├── job_train.sh             # SLURM script for training
+│   └── job_predict.sh           # SLURM script for WildFake evaluation
+└── results/
+    ├── classifier.pt            # Trained model checkpoint
+    ├── predictions.json         # WildFake clean predictions
+    ├── predictions_local.json   # Local test predictions
+    └── robustness_local.json    # Per-transform metrics
 ```
 
 ### Environment switching
