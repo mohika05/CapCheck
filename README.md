@@ -222,7 +222,7 @@ Expected: 13,841 entries, each with `image_path` (string) and `pred` (float, 0.0
 | **Faye** | Data Pipeline & Infrastructure | TC1 GPU cluster setup and access, dataset downloads and organisation on the cluster, data directory structure, initial model training for validation |
 | **Mohika** | Model Development | Feature extraction pipeline (`stream_extract.py`), training pipeline (`train.py`), CLIP + DCT architecture design, domain gap diagnosis and dataset selection (SynthBuster, Tiny-GenImage, ViT-L/14 upgrade), augmentation implementations, SLURM job scripts, `config.py` environment switching |
 | **Yu Chen** | Inference & Evaluation | Inference script (`predict.py`), robustness evaluation framework, prediction output formatting |
-| **Jerral** | Documentation & Presentation | README, Devpost write-up, demo video, error analysis documentation |
+| **Jerral** | Documentation & Presentation | README, Evaluate robustness on untrained dataset, Devpost write-up, demo video, error analysis documentation |
 
 ---
 
