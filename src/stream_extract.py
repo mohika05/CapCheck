@@ -16,14 +16,6 @@ Source caps are optional:
 WildFake must NOT appear in config.TRAIN_SOURCES. It is evaluated only after
 training by predict.py.
 
-Each output shard stores:
-    clip   (N, 768) float32   <- 768-dim for ViT-L-14 (was 512 for ViT-B-32)
-    dct    (N, 64)  float32
-    label  (N,)     int64    binary target
-    group  (N,)     int64    source-image id shared by augmented copies
-    aug    (N,)     int64    index into AUG_NAMES (0 = clean)
-    src    (N,)     int64    index into config.TRAIN_SOURCES
-
 A fresh extraction is required after changing preprocessing/label mapping
 or after switching CLIP models. By default this script refuses to append
 to an existing shard directory. Use --overwrite to explicitly replace old shards.
@@ -49,10 +41,7 @@ import config as C
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 cv2.setNumThreads(0)
 
-# ─────────────────────────────────────────────────────────────────────
 # Track-5 transformations
-# ─────────────────────────────────────────────────────────────────────
-
 def _jpeg(rgb, quality):
     ok, enc = cv2.imencode(
         '.jpg', rgb[:, :, ::-1], [int(cv2.IMWRITE_JPEG_QUALITY), quality]
@@ -61,14 +50,11 @@ def _jpeg(rgb, quality):
         return rgb
     return cv2.imdecode(enc, cv2.IMREAD_COLOR)[:, :, ::-1]
 
-
 def _blur(rgb, sigma):
     k = int(2 * round(3 * sigma) + 1)
     return cv2.GaussianBlur(rgb, (k, k), sigma)
 
-
 def _resize(rgb, scale):
-    """Downscale and then upscale back to the original resolution."""
     h, w = rgb.shape[:2]
     small = cv2.resize(
         rgb,
@@ -77,11 +63,9 @@ def _resize(rgb, scale):
     )
     return cv2.resize(small, (w, h), interpolation=cv2.INTER_LINEAR)
 
-
 def _noise(rgb, sigma, rng):
     noise = rng.normal(0.0, sigma * 255.0, rgb.shape)
     return np.clip(rgb.astype(np.float32) + noise, 0, 255).astype(np.uint8)
-
 
 def _jitter(rgb, amount, rng):
     brightness, contrast, saturation = 1.0 + rng.uniform(-amount, amount, 3)
@@ -96,14 +80,12 @@ def _jitter(rgb, amount, rng):
     hsv[:, :, 1] = np.clip(hsv[:, :, 1] * saturation, 0, 255)
     return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2RGB)
 
-
 def _center_crop(rgb, frac):
     h, w = rgb.shape[:2]
     ch, cw = max(1, int(h * frac)), max(1, int(w * frac))
     y0 = (h - ch) // 2
     x0 = (w - cw) // 2
     return rgb[y0:y0 + ch, x0:x0 + cw]
-
 
 AUGS = [
     ('clean',       lambda x, r: x),
@@ -124,9 +106,7 @@ AUGS = [
 ]
 AUG_NAMES = [name for name, _ in AUGS]
 
-
 def dct_feature(rgb, size=128):
-    """Return the exact 64-D DCT feature used by both train and predict."""
     gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
     gray = cv2.resize(
         gray, (size, size), interpolation=cv2.INTER_AREA
@@ -137,10 +117,7 @@ def dct_feature(rgb, size=128):
     dc = np.log1p(abs(block[0])) * np.sign(block[0])
     return np.concatenate([[dc], ac]).astype(np.float32)
 
-
-# ─────────────────────────────────────────────────────────────────────
 # Label handling
-# ─────────────────────────────────────────────────────────────────────
 
 RAW_VALID_LABELS = {0, 1, 2}
 IMG_EXTS = {'.jpg', '.jpeg', '.png', '.webp', '.bmp', '.tif', '.tiff'}
@@ -175,7 +152,6 @@ SKIP_TOKENS = {
     'mask', 'masks', 'gt', 'groundtruth', 'ground_truth',
     'annotation', 'annotations', 'label', 'labels', 'seg',
 }
-
 STR_LABELS = {
     'real': 0,
     'authentic': 0,
@@ -192,23 +168,11 @@ STR_LABELS = {
     'manipulated': 2,
 }
 
-
 def _norm(token):
     return token.strip().lower().replace('-', '_').replace(' ', '_')
 
-
 def infer_label_from_path(path, root):
-    """Infer the raw 0/1/2 label from folders below a source root.
-
-    SynthBuster folder layout example:
-        synthbuster/dalle2/img_001.png   -> FAKE_TOKENS matches 'dalle2' -> 1
-        synthbuster/stable_diffusion_1_3/img.png -> partial match on
-            'stable_diffusion' prefix -> 1
-
-    The prefix check below handles multi-word generator names like
-    'stable_diffusion_1_3' which won't match the token set exactly but
-    start with a known token.
-    """
+    #Infer the raw 0/1/2 label from folders below a source root.
     try:
         parts = Path(path).relative_to(root).parts[:-1]
     except ValueError:
@@ -235,7 +199,6 @@ def infer_label_from_path(path, root):
         return 0
     return None
 
-
 def label_from_value(raw):
     """Normalise an HF label value to raw integer label 0/1/2."""
     if isinstance(raw, str):
@@ -243,7 +206,6 @@ def label_from_value(raw):
     if isinstance(raw, (bool, int, np.integer)):
         return int(raw)
     return None
-
 
 def to_binary_label(raw):
     """Map Track-5 training labels to 0=authentic, 1=AIGC/AI-edited."""
@@ -253,11 +215,7 @@ def to_binary_label(raw):
         return 1
     return None
 
-
-# ─────────────────────────────────────────────────────────────────────
 # Sources
-# ─────────────────────────────────────────────────────────────────────
-
 class FolderSource:
     kind = 'dir'
 
@@ -321,10 +279,8 @@ class FolderSource:
             counts['skipped'] = skipped
         return counts, unlabelled, seen
 
-
 class HFSource:
     """Hugging Face streaming source."""
-
     kind = 'hf'
 
     def __init__(
@@ -387,7 +343,6 @@ class HFSource:
                 break
         return counts, [], seen
 
-
 def _make_source(entry):
     entry = dict(entry)
     kind = entry.pop('type')
@@ -402,15 +357,10 @@ def _make_source(entry):
         raise SystemExit(f'Unknown source type: {kind!r}')
     return source, cap, n_aug
 
-
 def build_sources():
     return [_make_source(entry) for entry in C.TRAIN_SOURCES]
 
-
-# ─────────────────────────────────────────────────────────────────────
 # Iterable feature stream
-# ─────────────────────────────────────────────────────────────────────
-
 class MultiStream(IterableDataset):
     def __init__(self, sources, preprocess):
         self.sources = sources
@@ -490,11 +440,7 @@ class MultiStream(IterableDataset):
                     except Exception:
                         continue
 
-
-# ─────────────────────────────────────────────────────────────────────
 # Inspection helpers
-# ─────────────────────────────────────────────────────────────────────
-
 def do_probe(spec):
     try:
         from datasets import load_dataset
@@ -541,11 +487,7 @@ def do_dry_run(sources):
             print(f'      unrecognised: {path}')
     print()
 
-
-# ─────────────────────────────────────────────────────────────────────
 # Main extraction
-# ─────────────────────────────────────────────────────────────────────
-
 def run(overwrite=False):
     import open_clip
 
@@ -573,7 +515,7 @@ def run(overwrite=False):
     if device.type == 'cuda':
         print(f'GPU: {torch.cuda.get_device_name(0)}')
 
-    # ViT-L-14: 768-dim embeddings, 14x14 patches for finer local resolution
+    # ViT-L-14: 768-dim embeddings
     model, _, preprocess = open_clip.create_model_and_transforms(
         C.CLIP_MODEL, pretrained=C.CLIP_PRETRAINED
     )
@@ -724,7 +666,6 @@ def run(overwrite=False):
         f'\nDone. {total:,} feature vectors in {out_dir}/ '
         f'({time.time() - start:.0f}s)'
     )
-
 
 if __name__ == '__main__':
     args = sys.argv[1:]

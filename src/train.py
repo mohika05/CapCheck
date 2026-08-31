@@ -2,10 +2,10 @@
 """
 Train the binary CLIP+DCT AIGC classifier.
 
-Important competition split:
-- Optimizer data: SID + CIFAKE + SynthBuster train.
+Important split:
+- Optimizer data: SID + CIFAKE + SynthBuster + tiny_genimage train.
 - Internal model selection: source(s) in config.VAL_SOURCE_NAMES
-  (TC1 config uses CIFAKE test).
+(TC1 config uses CIFAKE test).
 - WildFake: never loaded here. It is evaluated only by predict.py after the
   checkpoint is frozen.
 
@@ -108,7 +108,6 @@ def load_shards(dirs):
             )
     return data
 
-
 def _aug_names(dirs):
     for directory in dirs:
         path = Path(directory) / 'meta.json'
@@ -118,7 +117,6 @@ def _aug_names(dirs):
                 return names
     return None
 
-
 def build_features(clip, dct):
     """Exact train-side feature construction mirrored by predict.py."""
     clip = clip.astype(np.float32)
@@ -126,13 +124,9 @@ def build_features(clip, dct):
     clip /= np.linalg.norm(clip, axis=1, keepdims=True) + 1e-8
     return np.concatenate([clip, dct], axis=1).astype(np.float32)
 
-
 class Classifier(nn.Module):
     """MLP classifier over CLIP + DCT features.
-
     Input dim is 832 with ViT-L-14 (768 CLIP + 64 DCT).
-    Hidden layers are scaled up slightly from the B/32 version to handle
-    the richer 768-dim CLIP embeddings without bottlenecking too early.
     """
     def __init__(self, input_dim):
         super().__init__()
@@ -149,7 +143,6 @@ class Classifier(nn.Module):
     def forward(self, x):
         return self.net(x).squeeze(-1)
 
-
 def _binary_metrics(y, probs):
     preds = (probs >= 0.5).astype(np.int64)
     acc = accuracy_score(y, preds)
@@ -157,7 +150,6 @@ def _binary_metrics(y, probs):
     if len(np.unique(y)) == 2:
         auc = roc_auc_score(y, probs)
     return acc, auc, preds
-
 
 def breakdown(title, tag_values, tag_names, y, probs, min_n=20):
     print(f'\n{title}')
@@ -175,13 +167,11 @@ def breakdown(title, tag_values, tag_names, y, probs, min_n=20):
         auc_text = f'{auc:.4f}' if auc is not None else 'n/a'
         print(f'{name:<18}{mask.sum():>9,}{acc:>10.4f}{auc_text:>10}')
 
-
 def _load_checkpoint(path, device):
     try:
         return torch.load(path, map_location=device, weights_only=True)
     except TypeError:
         return torch.load(path, map_location=device)
-
 
 def run():
     np.random.seed(C.SEED)
@@ -208,7 +198,7 @@ def run():
         )
     print(f'Feature dim: {actual_dim} (CLIP={C.CLIP_DIM} + DCT={C.DCT_DIM})')
 
-    # ── Split: NEVER WildFake ─────────────────────────────────────────
+    # Split
     if C.VAL_SOURCE_NAMES:
         val_ids = [idx for idx, name in enumerate(names) if name in C.VAL_SOURCE_NAMES]
         if not val_ids:
@@ -251,8 +241,8 @@ def run():
         f'authentic={train_counts[0]:,}, AIGC={train_counts[1]:,}'
     )
 
-    # ── Undersample majority class to 50/50 balance ───────────────────
-    # The previous run had many more fakes than reals after adding SynthBuster,
+    # Udersample majority class to 50/50 balance 
+    # Adding SynthBuster led to more fakes than reals
     # causing the model to become trigger-happy (FP jumped from 57 to 926).
     # Forcing 50/50 here fixes that without needing to add or remove data.
     real_idx = np.where(ytr == 0)[0]
@@ -357,7 +347,7 @@ def run():
             )
             print(f'           -> new best, saved to {model_path}')
 
-    # ── Final INTERNAL validation report ──────────────────────────────
+    # Final INTERNAL validation report 
     checkpoint = _load_checkpoint(model_path, device)
     model.load_state_dict(checkpoint['state_dict'])
     model.eval()
@@ -382,7 +372,7 @@ def run():
     breakdown('Internal validation by transform', ava, aug_names, yva_np, probs)
     breakdown('Internal validation by source', sva, names, yva_np, probs)
 
-    # ── Threshold search (informational only) ─────────────────────────
+    # Threshold search (informational only)
     print('\nOptimal threshold search on internal validation set:')
     print(f'{"threshold":>10}  {"acc":>8}  {"real_rec":>10}  {"aigc_rec":>10}  {"bal_acc":>10}')
 
