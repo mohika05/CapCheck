@@ -33,3 +33,24 @@ clean              13,841    0.8102    0.9056    0.8960    0.7617
 jpeg_90            13,841    0.8140    0.9054    0.8976    0.7668
 jpeg_70            13,841    0.7929    0.8770    0.8776    0.7450
 jpeg_50            13,841    0.7611    0.8357    0.8161    0.7300
+jpeg_30            13,841    0.7456    0.8316    0.8303    0.6977
+blur_0.5           13,841    0.8281    0.9290    0.9504    0.7590
+blur_1.0           13,841    0.7942    0.8734    0.8790    0.7462
+blur_2.0           13,841    0.5937    0.5531    0.3741    0.7179
+resize_0.5         13,841    0.7857    0.8626    0.8649    0.7409
+resize_0.25        13,841    0.6247    0.6203    0.4700    0.7121
+noise_0.02         13,841    0.7549    0.9035    0.9452    0.6473
+noise_0.05         13,841    0.7255    0.8601    0.9200    0.6155
+noise_0.10         13,841    0.6729    0.7695    0.8041    0.5988
+jitter_0.2         13,841    0.7997    0.9001    0.9056    0.7399
+crop_0.8           13,841    0.7327    0.9246    0.9804    0.5927
+
+Overall WildFake results
+Clean accuracy:                        0.8102
+Clean ROC-AUC:                         0.9056
+Overall accuracy (clean + transforms): 0.7491
+Mean per-condition accuracy:           0.7491
+Worst condition: blur_2.0 (0.5937)
+
+Saved robustness summary to /tc1home/FYP/faye0004/track5/results/robustness_summary.json
+Finished: Tue 01 Sep 2026 12:29:26 AM +08
