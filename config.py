@@ -78,7 +78,7 @@ if ENV == "local":
     VAL_SOURCE_NAMES = []
 
     FEATURES_TRAIN = str(PROJECT_ROOT / "features_test")
-    MODEL_PATH = str(PROJECT_ROOT / "results" / "classifier_local.pt")
+    MODEL_PATH = str(PROJECT_ROOT / "results" / "classifier.pt")
 
     PREDICT_IMAGES = str(PROJECT_ROOT / "data_test" / "validation")
     PREDICTIONS_OUT = str(PROJECT_ROOT / "results" / "predictions_local.json")
