@@ -78,26 +78,53 @@ No manual config switching is needed.
 
 ### Quick Start: Inference Only
 
-If you just want to run the trained model on your own images:
+**Standard Evaluation**  
+To score a directory of images and output a JSON list of predictions:
 
 ```bash
 python predict.py /path/to/image_directory
 ```
+*(Alternative flag: `--input_dir /path/to/image_directory`)*
 
-This outputs `results/predictions_local.json`:
-
+**Output:** 
+Generates `results/predictions_local.json` with the following schema:
 ```json
 [
-  {"image_path": "image1.jpg", "pred": 0.042},
-  {"image_path": "image2.png", "pred": 0.961}
+  {
+    "image_path": "/path/to/image_directory/image1.jpg",
+    "pred": 0.042
+  },
+  {
+    "image_path": "/path/to/image_directory/image2.png",
+    "pred": 0.961
+  }
 ]
 ```
+*(0.0 = Authentic, 1.0 = AI-Generated)*
 
-Scores: 0.0 = authentic, 1.0 = AI-generated.
+---
 
-To also compute accuracy metrics, place images in labelled subfolders (`real/` and `ai/` or `aigc/`) and run `python predict.py input`.
+**Robustness Benchmark & Automated Metrics**  
+To run the model against the 14 real-world transformations (JPEG, Blur, Noise, Resizing, Jitter, Cropping):
 
-To run the full robustness benchmark across all 14 transforms, add `--report-transforms`.
+```bash
+python predict.py /path/to/image_directory --report-transforms
+```
+
+**Directory Structure for Accuracy Scoring**  
+If you want the script to automatically calculate and print `Accuracy` and `ROC-AUC` metrics in the terminal, your images must be placed inside specific subfolders that indicate their true label. We recommend using the provided `input` structure:
+
+* **Real Images:** Place inside `input/real/`
+* **AI Images:** Place inside `input/ai/`
+
+When you run `python predict.py input`, the script will automatically calculate accuracy based on the `real/` and `ai/` subfolders inside it.
+
+*Note: If images are not in these recognized folders, the script will still successfully generate the JSON predictions, but accuracy metrics will be skipped.*
+
+**Benchmark Output:**
+1. Generates `predictions_local.json` for the clean images.
+2. Prints a terminal scorecard evaluating Accuracy and ROC-AUC per condition.
+3. Generates `results/robustness_local.json` containing the detailed metric breakdown.
 
 ### Full Reproduction: Extract â†’ Train â†’ Predict
 
@@ -238,57 +265,3 @@ AIGC precision is 92.8% â€” only 3.8% of real images are incorrectly flagge
 ### Key Trade-off
 
 The model operates at threshold 0.5, producing high real recall (89.6%) at the cost of lower AIGC recall (76.2%). The DCT branch provides strong signal on clean and mildly degraded images but becomes unreliable under heavy blur (Ïƒâ‰¥2.0) and aggressive downscaling (0.25Ã—), which destroy the frequency information it depends on. An adaptive gating mechanism that downweights DCT under detected degradation would mitigate this.
-
-
-# AI-Generated Image Detection Inference Pipeline
-
-This repository contains the evaluation script `predict.py` for scoring images as Authentic (Real) or AI-Generated.
-
-## Standard Evaluation
-To score a directory of images and output a JSON list of predictions:
-
-```bash
-python predict.py /path/to/image_directory
-```
-*(Alternative flag: `--input_dir /path/to/image_directory`)*
-
-**Output:** 
-Generates `results/predictions_local.json` with the following schema:
-```json
-[
-  {
-    "image_path": "/path/to/image_directory/image1.jpg",
-    "pred": 0.042
-  },
-  {
-    "image_path": "/path/to/image_directory/image2.png",
-    "pred": 0.961
-  }
-]
-```
-*(0.0 = Authentic, 1.0 = AI-Generated)*
-
----
-
-## Robustness Benchmark & Automated Metrics
-To run the model against the 14 real-world transformations (JPEG, Blur, Noise, Resizing, Jitter, Cropping):
-
-```bash
-python predict.py /path/to/image_directory --report-transforms
-```
-
-### Directory Structure for Accuracy Scoring
-If you want the script to automatically calculate and print `Accuracy` and `ROC-AUC` metrics in the terminal, your images must be placed inside specific subfolders that indicate their true label. We recommend using the provided `input` structure:
-
-* **Real Images:** Place inside `input/real/`
-* **AI Images:** Place inside `input/ai/`
-
-When you run `python predict.py input`, the script will automatically calculate accuracy based on the `real/` and `ai/` subfolders inside it.
-
-*Note: If images are not in these recognized folders, the script will still successfully generate the JSON predictions, but accuracy metrics will be skipped.*
-
-**Benchmark Output:**
-1. Generates `predictions_local.json` for the clean images.
-2. Prints a terminal scorecard evaluating Accuracy and ROC-AUC per condition.
-3. Generates `results/robustness_local.json` containing the detailed metric breakdown.
-
