@@ -36,10 +36,12 @@ python predict.py /path/to/image_directory --report-transforms
 ```
 
 ### Directory Structure for Accuracy Scoring
-If you want the script to automatically calculate and print `Accuracy` and `ROC-AUC` metrics in the terminal, your images must be placed inside subfolders that indicate their true label:
+If you want the script to automatically calculate and print `Accuracy` and `ROC-AUC` metrics in the terminal, your images must be placed inside specific subfolders that indicate their true label. We recommend using the provided `data_test/validation` structure:
 
-* **Real Images:** Place inside a folder named `real/`, `authentic/`, or `nature/`
-* **AI Images:** Place inside a folder named `aigc/`, `ai/`, or `fake/`
+* **Real Images:** Place inside `data_test/validation/real/`
+* **AI Images:** Place inside `data_test/validation/aigc/`
+
+When you run `python predict.py data_test/validation`, the script will automatically calculate accuracy based on the `real/` and `aigc/` subfolders inside it.
 
 *Note: If images are not in these recognized folders, the script will still successfully generate the JSON predictions, but accuracy metrics will be skipped.*
 
