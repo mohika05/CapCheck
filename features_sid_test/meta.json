@@ -1,0 +1,38 @@
+{
+  "total": 56,
+  "aug_names": [
+    "clean",
+    "jpeg_90",
+    "jpeg_70",
+    "jpeg_50",
+    "jpeg_30",
+    "blur_0.5",
+    "blur_1.0",
+    "blur_2.0",
+    "resize_0.5",
+    "resize_0.25",
+    "noise_0.02",
+    "noise_0.05",
+    "noise_0.10",
+    "jitter_0.2",
+    "crop_0.8"
+  ],
+  "n_classes": 2,
+  "class_names": [
+    "authentic",
+    "aigc"
+  ],
+  "raw_to_binary": {
+    "0": 0,
+    "1": 1,
+    "2": 1
+  },
+  "sources": [
+    {
+      "name": "sid",
+      "kind": "hf",
+      "max_per_raw_class": 20,
+      "n_aug": 0
+    }
+  ]
+}
