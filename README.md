@@ -28,14 +28,22 @@ Generates `results/predictions_local.json` with the following schema:
 
 ---
 
-## Robustness Benchmark
+## Robustness Benchmark & Automated Metrics
 To run the model against the 14 real-world transformations (JPEG, Blur, Noise, Resizing, Jitter, Cropping):
 
 ```bash
 python predict.py /path/to/image_directory --report-transforms
 ```
 
-**Output:**
+### Directory Structure for Accuracy Scoring
+If you want the script to automatically calculate and print `Accuracy` and `ROC-AUC` metrics in the terminal, your images must be placed inside subfolders that indicate their true label:
+
+* **Real Images:** Place inside a folder named `real/`, `authentic/`, or `nature/`
+* **AI Images:** Place inside a folder named `aigc/`, `ai/`, or `fake/`
+
+*Note: If images are not in these recognized folders, the script will still successfully generate the JSON predictions, but accuracy metrics will be skipped.*
+
+**Benchmark Output:**
 1. Generates `predictions_local.json` for the clean images.
 2. Prints a terminal scorecard evaluating Accuracy and ROC-AUC per condition.
 3. Generates `results/robustness_local.json` containing the detailed metric breakdown.
