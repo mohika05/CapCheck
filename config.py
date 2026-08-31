@@ -27,34 +27,15 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 # ================================================================
 if ENV == "local":
 
-    # Local CIFAKE subset already present in this repo:
-    #
-    # data_test/
-    #   REAL/
-    #   FAKE/
-    #
-    # We use every image that exists in those two local subset folders.
-    #
-    # SID is streamed from Hugging Face, but capped to only 100 examples
-    # from each RAW SID class for the local smoke test:
-    #   raw 0 = real
-    #   raw 1 = fully synthetic
-    #   raw 2 = tampered
-    #
-    # stream_extract.py maps these to the binary Track-5 target:
-    #   0 -> authentic
-    #   1 -> AIGC
-    #   2 -> AIGC
-
     TRAIN_SOURCES = [
         {
             "name": "sid",
             "type": "hf",
             "repo": "saberzl/SID_Set",
             "split": "train",
-            "max_per_class": 100,     # LOCAL ONLY: 100 per raw SID class
+            "max_per_class": 100,
             "n_aug": 0,
-            "shuffle_buffer": 100,    # small buffer so local test starts fast
+            "shuffle_buffer": 100,
         },
         {
             "name": "cifake_real",
@@ -62,7 +43,7 @@ if ENV == "local":
             "path": str(PROJECT_ROOT / "data_test" / "REAL"),
             "label": 0,
             "shuffle": False,
-            "max_per_class": 100,     # LOCAL ONLY: top 100 REAL images
+            "max_per_class": 100,
             "n_aug": 0,
         },
         {
@@ -71,24 +52,38 @@ if ENV == "local":
             "path": str(PROJECT_ROOT / "data_test" / "FAKE"),
             "label": 1,
             "shuffle": False,
-            "max_per_class": 100,     # LOCAL ONLY: top 100 FAKE images
+            "max_per_class": 100,
             "n_aug": 0,
+        },
+        {
+            "name": "synthbuster",
+            "type": "dir",
+            "path": str(PROJECT_ROOT / "data_test" / "synthbuster"),
+            "max_per_class": 20,      # LOCAL ONLY: tiny cap for smoke test
+            "n_aug": 0,
+        },
+        {
+            "name": "tiny_genimage",
+            "type": "hf",
+            "repo": "TheKernel01/Tiny-GenImage",
+            "split": "train",
+            "image_key": "image",
+            "label_key": "label",
+            "max_per_class": 20,      # LOCAL ONLY: tiny cap for smoke test
+            "n_aug": 0,
+            "shuffle_buffer": 100,
         },
     ]
 
-    # No external validation dataset during the smoke test.
-    # train.py will use its grouped random split.
     VAL_SOURCE_NAMES = []
 
     FEATURES_TRAIN = str(PROJECT_ROOT / "features_test")
     MODEL_PATH = str(PROJECT_ROOT / "results" / "classifier_local.pt")
 
-    # Defined for compatibility; WildFake is not part of local training.
     PREDICT_IMAGES = str(PROJECT_ROOT / "data_test" / "validation")
     PREDICTIONS_OUT = str(PROJECT_ROOT / "results" / "predictions_local.json")
     ROBUSTNESS_OUT = str(PROJECT_ROOT / "results" / "robustness_local.json")
 
-    # Small/local settings
     MAX_PER_CLASS = None
     N_AUG = 0
     N_WORKERS = 1
@@ -105,10 +100,7 @@ if ENV == "local":
 # ================================================================
 elif ENV == "tc1":
 
-    # Full CIFAKE dataset already stored on TC1.
     GPU_DATA_ROOT = Path("/tc1home/FYP/faye0004/techjam-track5/data")
-
-    # Feature/model outputs.
     GPU_OUTPUT_ROOT = Path("/tc1home/FYP/faye0004/track5")
 
     TRAIN_SOURCES = [
@@ -117,24 +109,14 @@ elif ENV == "tc1":
             "type": "hf",
             "repo": "saberzl/SID_Set",
             "split": "train",
-
-            # GPU FULL RUN:
-            # None means consume the entire SID train stream.
-            # No 20-image cap and no 30k cap.
             "max_per_class": None,
-
-            # Clean + one randomly selected Track-5 transform per image.
             "n_aug": 1,
-
-            # Larger shuffle buffer is fine on the cluster.
             "shuffle_buffer": 10000,
         },
         {
             "name": "cifake",
             "type": "dir",
             "path": str(GPU_DATA_ROOT / "cifake" / "train"),
-
-            # Use ALL CIFAKE train images present on TC1.
             "max_per_class": None,
             "n_aug": 1,
         },
@@ -142,35 +124,60 @@ elif ENV == "tc1":
             "name": "cifake_test",
             "type": "dir",
             "path": str(GPU_DATA_ROOT / "cifake" / "test"),
-
-            # Use ALL CIFAKE test images as internal validation.
             "max_per_class": None,
             "n_aug": 0,
         },
+        {
+            # SynthBuster: 9k images across 9 generators including
+            # DALL-E 2, DALL-E 3, Midjourney v5, Adobe Firefly,
+            # Stable Diffusion 1.3/1.4/2/XL, Glide.
+            # Folder structure: synthbuster/dalle2/, synthbuster/dalle3/, etc.
+            # Labels are inferred automatically from subfolder names.
+            # All 9k are fakes (label=1); reals come from CIFAKE/SID.
+            "name": "synthbuster",
+            "type": "dir",
+            "path": str(GPU_DATA_ROOT / "synthbuster32" / "resized_data_Synthbuster" / "Synthbuster_Dataset"),
+            "max_per_class": None,
+            "n_aug": 1,
+        },
+        {
+            # Tiny-GenImage: curated subset of GenImage.
+            # Reals are ImageNet photos — high-res, photorealistic, diverse.
+            # Fakes cover Midjourney v5, SD 1.4/1.5, GLIDE, ADM, VQDM,
+            # Wukong, BigGAN — pre-paired and labelled (0=real, 1=fake).
+            # Fixes the real distribution gap: model learns what genuine
+            # high-res photorealistic photos look like, sharpening the
+            # boundary against DALL-E Advanced fakes.
+            # 14 shards — compatible with N_WORKERS=4.
+            "name": "tiny_genimage",
+            "type": "hf",
+            "repo": "TheKernel01/Tiny-GenImage",
+            "split": "train",
+            "image_key": "image",
+            "label_key": "label",
+            "max_per_class": None,
+            "n_aug": 1,
+            "shuffle_buffer": 10000,
+        },
     ]
 
-    # CIFAKE test is kept out of optimisation and used for model selection.
-    # WildFake is NOT included here.
     VAL_SOURCE_NAMES = ["cifake_test"]
 
     FEATURES_TRAIN = str(GPU_OUTPUT_ROOT / "feature_test")
     MODEL_PATH = str(GPU_OUTPUT_ROOT / "results" / "classifier.pt")
 
-    # WildFake is used only AFTER the model has been trained/frozen.
     PREDICT_IMAGES = str(GPU_DATA_ROOT / "validation")
     PREDICTIONS_OUT = str(GPU_OUTPUT_ROOT / "results" / "predictions.json")
     ROBUSTNESS_OUT = str(GPU_OUTPUT_ROOT / "results" / "robustness_summary.json")
 
-    # Full GPU extraction settings
     MAX_PER_CLASS = None
     N_AUG = 1
     N_WORKERS = 4
     EXTRACT_BATCH_SIZE = 64
     SHARD_SIZE = 20000
 
-    # Full classifier training settings
     BATCH_SIZE = 512
-    EPOCHS = 50
+    EPOCHS = 75    # bumped from 50 — L/14 features + larger dataset needs more epochs
     LR = 1e-3
 
 
@@ -183,13 +190,17 @@ else:
 # ================================================================
 # SHARED
 # ================================================================
-# Shared OpenCLIP configuration used by extraction and training metadata.
-CLIP_MODEL = "ViT-B-32"
+# Switched from ViT-B-32 (512-dim) to ViT-L-14 (768-dim).
+# ViT-L-14 uses 14x14 patches instead of 32x32, giving finer-grained
+# local feature resolution — better at catching localised DALL-E artifacts
+# (hands, edges, texture inconsistencies) that B/32 patches average away.
+# Model size is ~300M params, well within the <2B competition limit.
+CLIP_MODEL = "ViT-L-14"
 CLIP_PRETRAINED = "openai"
 
 SEED = 42
 VAL_FRACTION = 0.15
 
-CLIP_DIM = 512
+CLIP_DIM = 768   # ViT-L-14 embedding dim (was 512 for ViT-B-32)
 DCT_DIM = 64
-INPUT_DIM = CLIP_DIM + DCT_DIM
+INPUT_DIM = CLIP_DIM + DCT_DIM  # 832 total (was 576)

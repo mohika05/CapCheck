@@ -1,31 +1,32 @@
 #!/usr/bin/env python3
 """
-Extract CLIP ViT-B/32 + DCT features for Track 5.
+Extract CLIP ViT-L-14 + DCT features for Track 5.
 
 The extracted classifier target is binary:
     0 = authentic
     1 = AIGC / AI-edited
 
-SID raw label 2 (tampered) is mapped to binary AIGC=1.
+SID raw label 2 (tampered) is skipped — not present in the WildFake eval set.
 
 Source caps are optional:
 - local smoke tests use small caps and stop early;
-- TC1 uses max_per_class=None, so every available SID/CIFAKE example is read.
+- TC1 uses max_per_class=None, so every available SID/CIFAKE/SynthBuster
+  example is read.
 
 WildFake must NOT appear in config.TRAIN_SOURCES. It is evaluated only after
 training by predict.py.
 
 Each output shard stores:
-    clip   (N, 512) float32
+    clip   (N, 768) float32   <- 768-dim for ViT-L-14 (was 512 for ViT-B-32)
     dct    (N, 64)  float32
     label  (N,)     int64    binary target
     group  (N,)     int64    source-image id shared by augmented copies
     aug    (N,)     int64    index into AUG_NAMES (0 = clean)
     src    (N,)     int64    index into config.TRAIN_SOURCES
 
-A fresh extraction is required after changing preprocessing/label mapping.
-By default this script refuses to append to an existing shard directory.
-Use --overwrite to explicitly replace old shards.
+A fresh extraction is required after changing preprocessing/label mapping
+or after switching CLIP models. By default this script refuses to append
+to an existing shard directory. Use --overwrite to explicitly replace old shards.
 """
 
 import json
@@ -83,7 +84,6 @@ def _noise(rgb, sigma, rng):
 
 
 def _jitter(rgb, amount, rng):
-    # Independent brightness / contrast / saturation factors in [1-a, 1+a].
     brightness, contrast, saturation = 1.0 + rng.uniform(-amount, amount, 3)
 
     out = np.clip(rgb.astype(np.float32) * brightness, 0, 255).astype(np.uint8)
@@ -153,9 +153,20 @@ REAL_TOKENS = {
 FAKE_TOKENS = {
     'fake', 'fakes', 'fake_images', '1_fake', 'ai', 'aigc',
     'synthetic', 'full_synthetic', 'fully_synthetic', 'generated',
-    'ai_generated', 'gan', 'diffusion', 'dalle', 'dall_e', 'dalle3',
-    'midjourney', 'stable_diffusion', 'sdxl', 'sd', 'flux',
-    'kandinsky', 'imagen', 'firefly',
+    'ai_generated', 'gan', 'diffusion',
+    # DALL-E variants
+    'dalle', 'dall_e', 'dalle2', 'dalle3', 'dall_e_2', 'dall_e_3',
+    # Midjourney
+    'midjourney',
+    # Stable Diffusion variants — added to cover SynthBuster folder names
+    # e.g. stable_diffusion_1_3, stable_diffusion_1_4, stable_diffusion_2,
+    # stable_diffusion_xl, stable_diffusion
+    'stable_diffusion', 'sdxl', 'sd',
+    # Other generators present in SynthBuster
+    'firefly',   # Adobe Firefly
+    'glide',     # OpenAI Glide
+    # Other common generators
+    'flux', 'kandinsky', 'imagen',
 }
 TAMPER_TOKENS = {
     'tampered', 'manipulated', 'edited', 'spliced', 'inpainted', 'forged'
@@ -187,7 +198,17 @@ def _norm(token):
 
 
 def infer_label_from_path(path, root):
-    """Infer the raw 0/1/2 label from folders below a source root."""
+    """Infer the raw 0/1/2 label from folders below a source root.
+
+    SynthBuster folder layout example:
+        synthbuster/dalle2/img_001.png   -> FAKE_TOKENS matches 'dalle2' -> 1
+        synthbuster/stable_diffusion_1_3/img.png -> partial match on
+            'stable_diffusion' prefix -> 1
+
+    The prefix check below handles multi-word generator names like
+    'stable_diffusion_1_3' which won't match the token set exactly but
+    start with a known token.
+    """
     try:
         parts = Path(path).relative_to(root).parts[:-1]
     except ValueError:
@@ -200,6 +221,9 @@ def infer_label_from_path(path, root):
         if token in TAMPER_TOKENS:
             return 2
         if token in FAKE_TOKENS:
+            return 1
+        # Prefix match for versioned generator names like stable_diffusion_1_3
+        if any(token.startswith(ft) for ft in FAKE_TOKENS if len(ft) > 3):
             return 1
         if token in REAL_TOKENS:
             return 0
@@ -246,7 +270,6 @@ class FolderSource:
             raise SystemExit(f'[{name}] path does not exist: {self.root}')
 
     def n_shards(self):
-        # FolderSource is explicitly split across DataLoader workers below.
         return 10 ** 6
 
     def _paths(self):
@@ -300,17 +323,7 @@ class FolderSource:
 
 
 class HFSource:
-    """Hugging Face streaming source.
-
-    Important:
-    Hugging Face IterableDataset is already aware of PyTorch DataLoader
-    workers. When this dataset is iterated inside a worker, HF partitions its
-    underlying shards for that worker automatically.
-
-    Therefore we MUST NOT call ds.shard(num_shards=nw, index=wid) manually
-    here. Doing both would shard SID twice and can reduce a 4-worker run to
-    roughly one quarter of the intended dataset.
-    """
+    """Hugging Face streaming source."""
 
     kind = 'hf'
 
@@ -352,11 +365,6 @@ class HFSource:
 
     def examples(self, wid, nw, seed=0):
         ds = self._load()
-
-        # Do NOT manually shard here.
-        # HF IterableDataset performs DataLoader-worker partitioning itself.
-        # Use the same shuffle seed in every worker so all workers share the
-        # same deterministic global shuffle before HF assigns worker shards.
         ds = ds.shuffle(seed=seed, buffer_size=self.shuffle_buffer)
 
         for example in ds:
@@ -415,17 +423,12 @@ class MultiStream(IterableDataset):
         rng = np.random.default_rng(20260830 + wid)
 
         for src_idx, (source, cap, n_aug) in enumerate(self.sources):
-            # cap=None means unlimited (the full TC1 run).
-            # A numeric cap is used for bounded/local smoke tests.
             worker_cap = None
             if cap is not None:
                 worker_cap = cap // nw + (1 if wid < (cap % nw) else 0)
 
             raw_counts = {0: 0, 1: 0, 2: 0}
 
-            # If a source has a forced label (e.g. local data_test/REAL),
-            # only that label must reach the cap before we stop. A mixed-label
-            # source such as SID waits for each raw SID class.
             forced = getattr(source, "forced", None)
             target_raw_labels = (
                 {int(forced)}
@@ -514,7 +517,6 @@ def do_probe(spec):
     print(f'\nShards: {getattr(ds, "n_shards", "unknown")}\n')
 
 
-
 def _cap_text(cap):
     return "ALL" if cap is None else f"{cap:,}/raw-class"
 
@@ -571,10 +573,13 @@ def run(overwrite=False):
     if device.type == 'cuda':
         print(f'GPU: {torch.cuda.get_device_name(0)}')
 
+    # ViT-L-14: 768-dim embeddings, 14x14 patches for finer local resolution
     model, _, preprocess = open_clip.create_model_and_transforms(
         C.CLIP_MODEL, pretrained=C.CLIP_PRETRAINED
     )
     model = model.to(device).eval()
+    print(f'CLIP model: {C.CLIP_MODEL} (pretrained={C.CLIP_PRETRAINED})')
+    print(f'Feature dim: CLIP={C.CLIP_DIM} + DCT={C.DCT_DIM} = {C.INPUT_DIM}')
 
     workers = C.N_WORKERS
     min_shards = min(source.n_shards() for source, _, _ in sources)
@@ -610,9 +615,6 @@ def run(overwrite=False):
     total = 0
     start = time.time()
 
-    # Verification counters.
-    # "originals" counts clean rows (aug == 0), i.e. source images.
-    # "vectors" counts clean + augmented feature vectors.
     source_vector_counts = np.zeros(len(sources), dtype=np.int64)
     source_original_counts = np.zeros(len(sources), dtype=np.int64)
 
@@ -680,6 +682,11 @@ def run(overwrite=False):
         json.dumps(
             {
                 'total': total,
+                'clip_model': C.CLIP_MODEL,
+                'clip_pretrained': C.CLIP_PRETRAINED,
+                'clip_dim': C.CLIP_DIM,
+                'dct_dim': C.DCT_DIM,
+                'input_dim': C.INPUT_DIM,
                 'aug_names': AUG_NAMES,
                 'n_classes': 2,
                 'class_names': ['authentic', 'aigc'],

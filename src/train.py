@@ -3,14 +3,19 @@
 Train the binary CLIP+DCT AIGC classifier.
 
 Important competition split:
-- Optimizer data: SID + CIFAKE train.
+- Optimizer data: SID + CIFAKE + SynthBuster train.
 - Internal model selection: source(s) in config.VAL_SOURCE_NAMES
   (TC1 config uses CIFAKE test).
 - WildFake: never loaded here. It is evaluated only by predict.py after the
   checkpoint is frozen.
 
-The checkpoint stores the feature mean/std so inference applies exactly the
-same CLIP L2-normalisation + concatenation + standardisation as training.
+Feature dimensions (ViT-L-14):
+    CLIP: 768-dim  (was 512 for ViT-B-32)
+    DCT:   64-dim
+    Total: 832-dim (was 576)
+
+The checkpoint stores clip_model, clip_pretrained, input_dim, mean, std
+so predict.py always loads the exact same model that was trained.
 """
 
 import json
@@ -49,6 +54,15 @@ def load_shards(dirs):
         meta_path = directory / 'meta.json'
         meta = json.loads(meta_path.read_text()) if meta_path.exists() else {}
         local_names = [item['name'] for item in meta.get('sources', [])]
+
+        # Verify the shard was extracted with the correct CLIP model
+        shard_clip_model = meta.get('clip_model')
+        if shard_clip_model and shard_clip_model != C.CLIP_MODEL:
+            raise SystemExit(
+                f'Shard in {directory} was extracted with {shard_clip_model} '
+                f'but config.CLIP_MODEL is {C.CLIP_MODEL}. '
+                f'Re-run stream_extract.py --overwrite.'
+            )
 
         for file in files:
             with np.load(file) as z:
@@ -114,16 +128,22 @@ def build_features(clip, dct):
 
 
 class Classifier(nn.Module):
+    """MLP classifier over CLIP + DCT features.
+
+    Input dim is 832 with ViT-L-14 (768 CLIP + 64 DCT).
+    Hidden layers are scaled up slightly from the B/32 version to handle
+    the richer 768-dim CLIP embeddings without bottlenecking too early.
+    """
     def __init__(self, input_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_dim, 256),
+            nn.Linear(input_dim, 512),
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(256, 64),
+            nn.Linear(512, 128),
             nn.ReLU(),
             nn.Dropout(0.2),
-            nn.Linear(64, 1),
+            nn.Linear(128, 1),
         )
 
     def forward(self, x):
@@ -177,6 +197,17 @@ def run():
     augs = data['aug']
     srcs = data['src']
 
+    # Verify feature dimension matches config
+    expected_dim = C.INPUT_DIM
+    actual_dim = X.shape[1]
+    if actual_dim != expected_dim:
+        raise SystemExit(
+            f'Feature dim mismatch: shards have {actual_dim} '
+            f'but config.INPUT_DIM={expected_dim}. '
+            f'Re-run stream_extract.py --overwrite with the correct CLIP model.'
+        )
+    print(f'Feature dim: {actual_dim} (CLIP={C.CLIP_DIM} + DCT={C.DCT_DIM})')
+
     # ── Split: NEVER WildFake ─────────────────────────────────────────
     if C.VAL_SOURCE_NAMES:
         val_ids = [idx for idx, name in enumerate(names) if name in C.VAL_SOURCE_NAMES]
@@ -216,11 +247,31 @@ def run():
     print(f'\nTrain {len(ytr):,} | Val {len(yva):,} | dim {X.shape[1]}')
     train_counts = np.bincount(ytr, minlength=2)
     print(
-        f'Train class balance: authentic={train_counts[0]:,}, '
-        f'AIGC={train_counts[1]:,}'
+        f'Train class balance BEFORE balancing: '
+        f'authentic={train_counts[0]:,}, AIGC={train_counts[1]:,}'
     )
 
-    # Fit scaling on optimizer data only.
+    # ── Undersample majority class to 50/50 balance ───────────────────
+    # The previous run had many more fakes than reals after adding SynthBuster,
+    # causing the model to become trigger-happy (FP jumped from 57 to 926).
+    # Forcing 50/50 here fixes that without needing to add or remove data.
+    real_idx = np.where(ytr == 0)[0]
+    fake_idx = np.where(ytr == 1)[0]
+    n_min = min(len(real_idx), len(fake_idx))
+    rng_bal = np.random.default_rng(C.SEED)
+    real_idx = rng_bal.choice(real_idx, n_min, replace=False)
+    fake_idx = rng_bal.choice(fake_idx, n_min, replace=False)
+    balanced_idx = np.concatenate([real_idx, fake_idx])
+    rng_bal.shuffle(balanced_idx)
+    Xtr, ytr = Xtr[balanced_idx], ytr[balanced_idx]
+
+    balanced_counts = np.bincount(ytr, minlength=2)
+    print(
+        f'Train class balance AFTER balancing:  '
+        f'authentic={balanced_counts[0]:,}, AIGC={balanced_counts[1]:,}'
+    )
+
+    # Fit scaling on balanced optimizer data only.
     mean = Xtr.mean(axis=0).astype(np.float32)
     std = (Xtr.std(axis=0) + 1e-6).astype(np.float32)
     Xtr = ((Xtr - mean) / std).astype(np.float32)
@@ -249,10 +300,8 @@ def run():
     model = Classifier(X.shape[1]).to(device)
     optimizer = torch.optim.AdamW(model.parameters(), lr=C.LR, weight_decay=1e-4)
 
-    negatives = max(1, int((ytr == 0).sum()))
-    positives = max(1, int((ytr == 1).sum()))
-    pos_weight = torch.tensor([negatives / positives], dtype=torch.float32, device=device)
-    criterion = nn.BCEWithLogitsLoss(pos_weight=pos_weight)
+    # No pos_weight — data is already balanced 50/50 so it would double-correct
+    criterion = nn.BCEWithLogitsLoss()
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, mode='max', patience=5, factor=0.5
     )
@@ -334,10 +383,6 @@ def run():
     breakdown('Internal validation by source', sva, names, yva_np, probs)
 
     # ── Threshold search (informational only) ─────────────────────────
-    # Finds the threshold that maximises balanced accuracy on the internal
-    # validation set. This does NOT change the saved model or predictions.json.
-    # Note: the optimal threshold here is for CIFAKE test distribution and
-    # may differ from the optimal threshold on WildFake — treat as diagnostic.
     print('\nOptimal threshold search on internal validation set:')
     print(f'{"threshold":>10}  {"acc":>8}  {"real_rec":>10}  {"aigc_rec":>10}  {"bal_acc":>10}')
 

@@ -1,0 +1,102 @@
+{
+  "clean_accuracy": 0.6655588469041255,
+  "overall_accuracy_clean_plus_transforms": 0.6333116585988489,
+  "mean_per_condition_accuracy": 0.6333116585988487,
+  "total_labeled_predictions_across_conditions": 207615,
+  "worst_condition": {
+    "transform": "crop_0.8",
+    "accuracy": 0.5529947258146087
+  },
+  "transforms": [
+    {
+      "transform": "clean",
+      "n_labeled": 13841,
+      "accuracy": 0.6655588469041255,
+      "roc_auc": 0.9346054377874636
+    },
+    {
+      "transform": "jpeg_90",
+      "n_labeled": 13841,
+      "accuracy": 0.668232064157214,
+      "roc_auc": 0.9396923758760544
+    },
+    {
+      "transform": "jpeg_70",
+      "n_labeled": 13841,
+      "accuracy": 0.6588396792139296,
+      "roc_auc": 0.9291289285136197
+    },
+    {
+      "transform": "jpeg_50",
+      "n_labeled": 13841,
+      "accuracy": 0.6437396141897261,
+      "roc_auc": 0.8999290884509408
+    },
+    {
+      "transform": "jpeg_30",
+      "n_labeled": 13841,
+      "accuracy": 0.6204753991763601,
+      "roc_auc": 0.922078715009695
+    },
+    {
+      "transform": "blur_0.5",
+      "n_labeled": 13841,
+      "accuracy": 0.6641138646051585,
+      "roc_auc": 0.9600756394381796
+    },
+    {
+      "transform": "blur_1.0",
+      "n_labeled": 13841,
+      "accuracy": 0.6517592659489921,
+      "roc_auc": 0.88056237987675
+    },
+    {
+      "transform": "blur_2.0",
+      "n_labeled": 13841,
+      "accuracy": 0.5740192182645762,
+      "roc_auc": 0.6358116920860848
+    },
+    {
+      "transform": "resize_0.5",
+      "n_labeled": 13841,
+      "accuracy": 0.6538544902824941,
+      "roc_auc": 0.8901478379432741
+    },
+    {
+      "transform": "resize_0.25",
+      "n_labeled": 13841,
+      "accuracy": 0.582616862943429,
+      "roc_auc": 0.6707744954817842
+    },
+    {
+      "transform": "noise_0.02",
+      "n_labeled": 13841,
+      "accuracy": 0.6519760132938371,
+      "roc_auc": 0.8905080521409061
+    },
+    {
+      "transform": "noise_0.05",
+      "n_labeled": 13841,
+      "accuracy": 0.6480745610866266,
+      "roc_auc": 0.8717100545974356
+    },
+    {
+      "transform": "noise_0.10",
+      "n_labeled": 13841,
+      "accuracy": 0.6084820460949354,
+      "roc_auc": 0.8487284544033604
+    },
+    {
+      "transform": "jitter_0.2",
+      "n_labeled": 13841,
+      "accuracy": 0.6549382270067192,
+      "roc_auc": 0.9140016404616806
+    },
+    {
+      "transform": "crop_0.8",
+      "n_labeled": 13841,
+      "accuracy": 0.5529947258146087,
+      "roc_auc": 0.883485951205089
+    }
+  ]
+}

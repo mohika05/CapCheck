@@ -1,0 +1,77 @@
+{
+  "total": 574000,
+  "clip_model": "ViT-L-14",
+  "clip_pretrained": "openai",
+  "clip_dim": 768,
+  "dct_dim": 64,
+  "input_dim": 832,
+  "aug_names": [
+    "clean",
+    "jpeg_90",
+    "jpeg_70",
+    "jpeg_50",
+    "jpeg_30",
+    "blur_0.5",
+    "blur_1.0",
+    "blur_2.0",
+    "resize_0.5",
+    "resize_0.25",
+    "noise_0.02",
+    "noise_0.05",
+    "noise_0.10",
+    "jitter_0.2",
+    "crop_0.8"
+  ],
+  "n_classes": 2,
+  "class_names": [
+    "authentic",
+    "aigc"
+  ],
+  "raw_to_binary": {
+    "0": 0,
+    "1": 1,
+    "2": "skipped"
+  },
+  "sources": [
+    {
+      "name": "sid",
+      "kind": "hf",
+      "max_per_raw_class": null,
+      "n_aug": 1,
+      "original_images": 140000,
+      "feature_vectors": 280000
+    },
+    {
+      "name": "cifake",
+      "kind": "dir",
+      "max_per_raw_class": null,
+      "n_aug": 1,
+      "original_images": 100000,
+      "feature_vectors": 200000
+    },
+    {
+      "name": "cifake_test",
+      "kind": "dir",
+      "max_per_raw_class": null,
+      "n_aug": 0,
+      "original_images": 20000,
+      "feature_vectors": 20000
+    },
+    {
+      "name": "synthbuster",
+      "kind": "dir",
+      "max_per_raw_class": null,
+      "n_aug": 1,
+      "original_images": 9000,
+      "feature_vectors": 18000
+    },
+    {
+      "name": "tiny_genimage",
+      "kind": "hf",
+      "max_per_raw_class": null,
+      "n_aug": 1,
+      "original_images": 28000,
+      "feature_vectors": 56000
+    }
+  ]
+}

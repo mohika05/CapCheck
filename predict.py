@@ -26,7 +26,12 @@ import numpy as np
 import torch
 import torch.nn as nn
 from PIL import Image, ImageFile
-from sklearn.metrics import accuracy_score, roc_auc_score
+from sklearn.metrics import (
+    accuracy_score,
+    classification_report,
+    roc_auc_score,
+    precision_recall_fscore_support,
+)
 from tqdm import tqdm
 
 import config as C
@@ -41,18 +46,20 @@ from src.stream_extract import (
 
 ImageFile.LOAD_TRUNCATED_IMAGES = True
 
+CLASS_NAMES = ['authentic', 'aigc']
+
 
 class Classifier(nn.Module):
     def __init__(self, input_dim):
         super().__init__()
         self.net = nn.Sequential(
-            nn.Linear(input_dim, 256),
+            nn.Linear(input_dim, 512),  # wider to match ViT-L-14's 768-dim input
             nn.ReLU(),
             nn.Dropout(0.3),
-            nn.Linear(256, 64),
+            nn.Linear(512, 128),
             nn.ReLU(),
             nn.Dropout(0.2),
-            nn.Linear(64, 1),
+            nn.Linear(128, 1),
         )
 
     def forward(self, x):
@@ -124,7 +131,6 @@ def _predict_transform(
                 if rgb.ndim != 3 or min(rgb.shape[:2]) < 16:
                     continue
 
-                # Deterministic noise/jitter so repeated reports are reproducible.
                 global_index = start + offset
                 rng = np.random.default_rng(
                     C.SEED + aug_id * 1_000_003 + global_index
@@ -158,8 +164,7 @@ def _predict_transform(
 
 
 def _metrics(results, root):
-    labels = []
-    scores = []
+    labels, scores = [], []
     for path, prob in results:
         label = _path_label(path, root)
         if label is None:
@@ -168,21 +173,66 @@ def _metrics(results, root):
         scores.append(prob)
 
     if not labels:
-        return {'n_labeled': 0, 'accuracy': None, 'roc_auc': None}
+        return {'n_labeled': 0, 'accuracy': None, 'roc_auc': None,
+                'real_precision': None, 'real_recall': None, 'real_f1': None,
+                'aigc_precision': None, 'aigc_recall': None, 'aigc_f1': None}
 
     y = np.asarray(labels, dtype=np.int64)
     p = np.asarray(scores, dtype=np.float32)
     pred = (p >= 0.5).astype(np.int64)
 
-    auc = None
-    if len(np.unique(y)) == 2:
-        auc = float(roc_auc_score(y, p))
+    auc = float(roc_auc_score(y, p)) if len(np.unique(y)) == 2 else None
+    acc = float(accuracy_score(y, pred))
+
+    prec, rec, f1, _ = precision_recall_fscore_support(
+        y, pred, labels=[0, 1], zero_division=0
+    )
+
+    tp = int(((pred == 1) & (y == 1)).sum())
+    tn = int(((pred == 0) & (y == 0)).sum())
+    fp = int(((pred == 1) & (y == 0)).sum())
+    fn = int(((pred == 0) & (y == 1)).sum())
 
     return {
         'n_labeled': int(len(y)),
-        'accuracy': float(accuracy_score(y, pred)),
+        'accuracy': acc,
         'roc_auc': auc,
+        'real_precision': float(prec[0]),
+        'real_recall': float(rec[0]),
+        'real_f1': float(f1[0]),
+        'aigc_precision': float(prec[1]),
+        'aigc_recall': float(rec[1]),
+        'aigc_f1': float(f1[1]),
+        'true_positives': tp,
+        'true_negatives': tn,
+        'false_positives': fp,
+        'false_negatives': fn,
     }
+
+
+def _print_full_report(metrics, label=''):
+    if label:
+        print(f'\n{label}')
+    n = metrics['n_labeled']
+    if not n:
+        print('  No labeled images found.')
+        return
+    print(f'  Images:   {n:,}')
+    print(f'  Accuracy: {metrics["accuracy"]:.4f}')
+    if metrics['roc_auc'] is not None:
+        print(f'  ROC-AUC:  {metrics["roc_auc"]:.4f}')
+    print()
+    print(f'  {"":12}  {"precision":>10}  {"recall":>10}  {"f1":>10}')
+    print(f'  {"authentic":12}  {metrics["real_precision"]:>10.4f}  '
+          f'{metrics["real_recall"]:>10.4f}  {metrics["real_f1"]:>10.4f}')
+    print(f'  {"aigc":12}  {metrics["aigc_precision"]:>10.4f}  '
+          f'{metrics["aigc_recall"]:>10.4f}  {metrics["aigc_f1"]:>10.4f}')
+    print()
+    print(f'  Confusion matrix:')
+    print(f'    TP (AIGC correctly detected): {metrics["true_positives"]:,}')
+    print(f'    TN (Real correctly cleared):  {metrics["true_negatives"]:,}')
+    print(f'    FP (Real wrongly flagged):    {metrics["false_positives"]:,}')
+    print(f'    FN (AIGC wrongly missed):     {metrics["false_negatives"]:,}')
 
 
 def _write_predictions(results, output_path):
@@ -249,102 +299,76 @@ def main():
     )
     model_clip = model_clip.to(device).eval()
 
-    # Clean pass is always required for the submission JSON.
+    # Clean pass — always required for submission JSON
     clean_results = _predict_transform(
-        paths,
-        0,
-        model_clip,
-        preprocess,
-        classifier,
-        mean_t,
-        std_t,
-        device,
-        args.batch_size,
+        paths, 0, model_clip, preprocess, classifier,
+        mean_t, std_t, device, args.batch_size,
     )
     n_written = _write_predictions(clean_results, args.output)
     print(f'Saved {n_written:,} clean predictions to {args.output}')
 
     clean_metrics = _metrics(clean_results, root)
-    if clean_metrics['n_labeled']:
-        auc_text = (
-            f'{clean_metrics["roc_auc"]:.4f}'
-            if clean_metrics['roc_auc'] is not None else 'n/a'
-        )
-        print(
-            f'Clean | n={clean_metrics["n_labeled"]:,} '
-            f'| acc={clean_metrics["accuracy"]:.4f} | auc={auc_text}'
-        )
+    _print_full_report(clean_metrics, label='Clean WildFake results')
 
     if not args.report_transforms:
         return
 
-    summary = []
-    clean_row = {'transform': 'clean', **clean_metrics}
-    summary.append(clean_row)
+    summary = [{'transform': 'clean', **clean_metrics}]
 
     print('\nRobustness evaluation')
-    print(f'{"transform":<16}{"n":>9}{"acc":>10}{"auc":>10}')
+    print(f'{"transform":<16}{"n":>9}{"acc":>10}{"auc":>10}'
+          f'{"real_rec":>10}{"aigc_rec":>10}')
 
-    def print_row(row):
-        acc = 'n/a' if row['accuracy'] is None else f'{row["accuracy"]:.4f}'
-        auc = 'n/a' if row['roc_auc'] is None else f'{row["roc_auc"]:.4f}'
-        print(f'{row["transform"]:<16}{row["n_labeled"]:>9,}{acc:>10}{auc:>10}')
+    def print_row(name, m):
+        acc = 'n/a' if m['accuracy'] is None else f'{m["accuracy"]:.4f}'
+        auc = 'n/a' if m['roc_auc'] is None else f'{m["roc_auc"]:.4f}'
+        rr  = 'n/a' if m['real_recall'] is None else f'{m["real_recall"]:.4f}'
+        ar  = 'n/a' if m['aigc_recall'] is None else f'{m["aigc_recall"]:.4f}'
+        print(f'{name:<16}{m["n_labeled"]:>9,}{acc:>10}{auc:>10}{rr:>10}{ar:>10}')
 
-    print_row(clean_row)
+    print_row('clean', clean_metrics)
 
     for aug_id in range(1, len(AUGS)):
         results = _predict_transform(
-            paths,
-            aug_id,
-            model_clip,
-            preprocess,
-            classifier,
-            mean_t,
-            std_t,
-            device,
-            args.batch_size,
+            paths, aug_id, model_clip, preprocess, classifier,
+            mean_t, std_t, device, args.batch_size,
         )
-        row = {'transform': AUG_NAMES[aug_id], **_metrics(results, root)}
-        summary.append(row)
-        print_row(row)
+        m = {'transform': AUG_NAMES[aug_id], **_metrics(results, root)}
+        summary.append(m)
+        print_row(AUG_NAMES[aug_id], m)
 
-    valid_rows = [
-        row for row in summary
-        if row['accuracy'] is not None and row['n_labeled'] > 0
-    ]
-    total_n = sum(row['n_labeled'] for row in valid_rows)
-    overall_accuracy = (
-        sum(row['accuracy'] * row['n_labeled'] for row in valid_rows) / total_n
+    valid_rows = [r for r in summary if r['accuracy'] is not None and r['n_labeled'] > 0]
+    total_n = sum(r['n_labeled'] for r in valid_rows)
+    overall_acc = (
+        sum(r['accuracy'] * r['n_labeled'] for r in valid_rows) / total_n
         if total_n else None
     )
-    mean_transform_accuracy = (
-        float(np.mean([row['accuracy'] for row in valid_rows]))
-        if valid_rows else None
-    )
-    worst = min(valid_rows, key=lambda row: row['accuracy']) if valid_rows else None
+    mean_acc = float(np.mean([r['accuracy'] for r in valid_rows])) if valid_rows else None
+    worst = min(valid_rows, key=lambda r: r['accuracy']) if valid_rows else None
 
     report = {
         'clean_accuracy': clean_metrics['accuracy'],
-        'overall_accuracy_clean_plus_transforms': overall_accuracy,
-        'mean_per_condition_accuracy': mean_transform_accuracy,
+        'clean_roc_auc': clean_metrics['roc_auc'],
+        'overall_accuracy_clean_plus_transforms': overall_acc,
+        'mean_per_condition_accuracy': mean_acc,
         'total_labeled_predictions_across_conditions': int(total_n),
         'worst_condition': (
-            {
-                'transform': worst['transform'],
-                'accuracy': worst['accuracy'],
-            } if worst else None
+            {'transform': worst['transform'], 'accuracy': worst['accuracy']}
+            if worst else None
         ),
         'transforms': summary,
     }
 
     print('\nOverall WildFake results')
     if clean_metrics['accuracy'] is not None:
-        print(f'Clean overall accuracy:                 {clean_metrics["accuracy"]:.4f}')
-    if overall_accuracy is not None:
-        print(f'Overall accuracy (clean + transforms): {overall_accuracy:.4f}')
-    if mean_transform_accuracy is not None:
-        print(f'Mean per-condition accuracy:           {mean_transform_accuracy:.4f}')
-    if worst is not None:
+        print(f'Clean accuracy:                        {clean_metrics["accuracy"]:.4f}')
+    if clean_metrics['roc_auc'] is not None:
+        print(f'Clean ROC-AUC:                         {clean_metrics["roc_auc"]:.4f}')
+    if overall_acc is not None:
+        print(f'Overall accuracy (clean + transforms): {overall_acc:.4f}')
+    if mean_acc is not None:
+        print(f'Mean per-condition accuracy:           {mean_acc:.4f}')
+    if worst:
         print(f'Worst condition: {worst["transform"]} ({worst["accuracy"]:.4f})')
 
     robustness_path = Path(args.robustness_output)

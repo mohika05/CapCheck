@@ -1,0 +1,35 @@
+Project:    /tc1home/FYP/faye0004/track5
+Model:      /tc1home/FYP/faye0004/track5/results/classifier.pt
+Images:     /tc1home/FYP/faye0004/techjam-track5/data/validation
+Predictions:/tc1home/FYP/faye0004/track5/results/predictions.json
+Robustness: /tc1home/FYP/faye0004/track5/results/robustness_summary.json
+Job:        63621
+Node:       TC1N03
+Started:    Mon 31 Aug 2026 09:53:50 PM +08
+Starting WildFake clean + robustness evaluation...
+Found 13,841 images under /tc1home/FYP/faye0004/techjam-track5/data/validation
+Device: cuda
+GPU: Tesla V100-PCIE-32GB
+Saved 13,841 clean predictions to /tc1home/FYP/faye0004/track5/results/predictions.json
+
+Clean WildFake results
+  Images:   13,841
+  Accuracy: 0.8102
+  ROC-AUC:  0.9056
+
+                 precision      recall          f1
+  authentic         0.6800      0.8960      0.7732
+  aigc              0.9283      0.7617      0.8368
+
+  Confusion matrix:
+    TP (AIGC correctly detected): 6,736
+    TN (Real correctly cleared):  4,478
+    FP (Real wrongly flagged):    520
+    FN (AIGC wrongly missed):     2,107
+
+Robustness evaluation
+transform               n       acc       auc  real_rec  aigc_rec
+clean              13,841    0.8102    0.9056    0.8960    0.7617
+jpeg_90            13,841    0.8140    0.9054    0.8976    0.7668
+jpeg_70            13,841    0.7929    0.8770    0.8776    0.7450
+jpeg_50            13,841    0.7611    0.8357    0.8161    0.7300
