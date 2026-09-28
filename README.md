@@ -69,8 +69,8 @@ track5/
 
 The codebase uses a single `config.py` that auto-selects paths based on the `ENV` environment variable:
 
-- **Local (default):** `ENV` is unset â†’ uses small test datasets and local paths
-- **GPU cluster:** `export ENV=tc1` â†’ uses full datasets and TC1 cluster paths (set automatically in SLURM job scripts)
+- **Local (default):** `ENV` is unset -> uses small test datasets and local paths
+- **GPU cluster:** `export ENV=tc1` -> uses full datasets and TC1 cluster paths (set automatically in SLURM job scripts)
 
 No manual config switching is needed.
 
@@ -128,7 +128,7 @@ When you run `python predict.py input`, the script will automatically calculate 
 2. Prints a terminal scorecard evaluating Accuracy and ROC-AUC per condition.
 3. Generates `results/robustness_local.json` containing the detailed metric breakdown.
 
-### Full Reproduction: Extract â†’ Train â†’ Predict
+### Full Reproduction: Extract -> Train -> Predict
 
 #### 1. Prepare data
 

@@ -1,27 +1,40 @@
-# Data
-data/
-data_test/
-*.zip
-
-# Generated features — too large for git
-features/
-features_test/
-*.npy
-
 # Python
 __pycache__/
 *.pyc
 .env
 venv/
+env/
 techjam/
 
-# Secrets — never commit these
+# OS
+.DS_Store
+
+# Secrets
 *.key
 kaggle.json
-.env
 
-# OS
-.DS_Storefeature_test/
+# Data and generated artifacts
+data/
+data_test/
+features/
+features_test/
+feature_test/
+*.zip
+*.npy
+*.npz
 
-# results
-predictions_local.json
+# Local sample inputs
+input/**/*.jpg
+input/**/*.jpeg
+input/**/*.png
+input/**/*.webp
+input/**/*.bmp
+!input/**/.gitkeep
+
+# Logs
+output_*.out
+error_*.err
+
+# Generated prediction reports
+results/predictions*.json
+results/robustness*.json
